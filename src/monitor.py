@@ -8,14 +8,16 @@ import os
 import json
 import hashlib
 import asyncio
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import yaml
 import httpx
 from playwright.async_api import async_playwright
 from anthropic import Anthropic
+from openai import OpenAI
 import resend
+import markdown
 
 
 class WebScraper:
@@ -108,7 +110,7 @@ class SnapshotManager:
         snapshot = {
             "name": competitor_name,
             "url": url,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "content_hash": content_hash,
             "content": content[:10000]  # Store first 10k chars for reference
         }
@@ -142,12 +144,19 @@ class SnapshotManager:
 
 
 class CompetitiveIntelligenceAnalyzer:
-    """Analyzes changes using Anthropic API."""
+    """Analyzes changes using AI (Anthropic or OpenAI)."""
 
-    def __init__(self, api_key: str, model: str, max_tokens: int):
-        self.client = Anthropic(api_key=api_key)
+    def __init__(self, provider: str, api_key: str, model: str, max_tokens: int):
+        self.provider = provider.lower()
         self.model = model
         self.max_tokens = max_tokens
+
+        if self.provider == "anthropic":
+            self.client = Anthropic(api_key=api_key)
+        elif self.provider == "openai":
+            self.client = OpenAI(api_key=api_key)
+        else:
+            raise ValueError(f"Unsupported AI provider: {provider}. Use 'anthropic' or 'openai'.")
 
     def analyze_changes(self, changes: List[Dict]) -> str:
         """Analyze detected changes and generate insights."""
@@ -177,16 +186,34 @@ Please analyze these changes and provide:
 Focus on actionable intelligence rather than just describing what changed."""
 
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            return message.content[0].text
+            if self.provider == "anthropic":
+                return self._analyze_with_anthropic(prompt)
+            elif self.provider == "openai":
+                return self._analyze_with_openai(prompt)
         except Exception as e:
-            print(f"Error calling Anthropic API: {e}")
+            print(f"Error calling {self.provider.title()} API: {e}")
             return f"Error analyzing changes: {str(e)}"
+
+    def _analyze_with_anthropic(self, prompt: str) -> str:
+        """Analyze using Anthropic Claude."""
+        message = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return message.content[0].text
+
+    def _analyze_with_openai(self, prompt: str) -> str:
+        """Analyze using OpenAI GPT."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[
+                {"role": "system", "content": "You are a competitive intelligence analyst monitoring competitor websites for strategic changes."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content
 
 
 class EmailReporter:
@@ -211,12 +238,46 @@ class EmailReporter:
             </div>
             """
 
+        # Convert markdown analysis to HTML
+        analysis_html = markdown.markdown(
+            analysis,
+            extensions=['extra', 'nl2br', 'sane_lists']
+        )
+
         html = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                .analysis-content h2 {{
+                    color: #1e40af;
+                    font-size: 1.25em;
+                    margin-top: 1.5em;
+                    margin-bottom: 0.5em;
+                }}
+                .analysis-content h3 {{
+                    color: #1f2937;
+                    font-size: 1.1em;
+                    margin-top: 1em;
+                    margin-bottom: 0.5em;
+                }}
+                .analysis-content ul, .analysis-content ol {{
+                    margin: 0.5em 0;
+                    padding-left: 1.5em;
+                }}
+                .analysis-content li {{
+                    margin: 0.25em 0;
+                }}
+                .analysis-content p {{
+                    margin: 0.75em 0;
+                }}
+                .analysis-content strong {{
+                    color: #1f2937;
+                    font-weight: 600;
+                }}
+            </style>
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
             <div style="background-color: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
@@ -235,8 +296,8 @@ class EmailReporter:
                     AI Analysis & Insights
                 </h2>
 
-                <div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; white-space: pre-wrap;">
-{analysis}
+                <div class="analysis-content" style="background-color: #f0f9ff; padding: 15px; border-radius: 8px;">
+{analysis_html}
                 </div>
 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 14px;">
@@ -256,7 +317,7 @@ class EmailReporter:
             print("No changes to report, skipping email")
             return True
 
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         html_content = self._generate_html_digest(changes, analysis, timestamp)
         subject = f"{subject_prefix} {len(changes)} change(s) detected - {timestamp}"
 
@@ -280,7 +341,7 @@ class EmailReporter:
 
 async def main():
     """Main monitoring function."""
-    print(f"Starting competitor monitoring at {datetime.utcnow().isoformat()}")
+    print(f"Starting competitor monitoring at {datetime.now(UTC).isoformat()}")
 
     # Load configuration
     config_path = Path(__file__).parent.parent / "config.yaml"
@@ -288,13 +349,29 @@ async def main():
         config = yaml.safe_load(f)
 
     # Get API keys from environment
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    ai_provider = config['ai']['provider'].lower()
     resend_api_key = os.getenv("RESEND_API_KEY")
 
-    if not anthropic_api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable not set")
     if not resend_api_key:
         raise ValueError("RESEND_API_KEY environment variable not set")
+
+    # Get appropriate AI API key based on provider
+    if ai_provider == "anthropic":
+        ai_api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not ai_api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        ai_model = config['ai']['anthropic']['model']
+        ai_max_tokens = config['ai']['anthropic']['max_tokens']
+    elif ai_provider == "openai":
+        ai_api_key = os.getenv("OPENAI_API_KEY")
+        if not ai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set")
+        ai_model = config['ai']['openai']['model']
+        ai_max_tokens = config['ai']['openai']['max_tokens']
+    else:
+        raise ValueError(f"Unsupported AI provider in config: {ai_provider}")
+
+    print(f"Using AI provider: {ai_provider.title()} ({ai_model})")
 
     # Initialize components
     snapshots_dir = Path(__file__).parent.parent / "snapshots"
@@ -304,9 +381,10 @@ async def main():
     )
     snapshot_manager = SnapshotManager(snapshots_dir)
     analyzer = CompetitiveIntelligenceAnalyzer(
-        api_key=anthropic_api_key,
-        model=config['anthropic']['model'],
-        max_tokens=config['anthropic']['max_tokens']
+        provider=ai_provider,
+        api_key=ai_api_key,
+        model=ai_model,
+        max_tokens=ai_max_tokens
     )
     reporter = EmailReporter(
         api_key=resend_api_key,
@@ -358,7 +436,7 @@ async def main():
     print(f"{'='*60}")
     reporter.send_digest(changes, analysis, config['email']['subject_prefix'])
 
-    print(f"\nMonitoring complete at {datetime.utcnow().isoformat()}")
+    print(f"\nMonitoring complete at {datetime.now(UTC).isoformat()}")
     print(f"Total changes detected: {len(changes)}")
 
 
