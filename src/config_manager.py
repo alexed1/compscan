@@ -49,5 +49,8 @@ class ConfigManager:
         }
 
     def get_competitors(self) -> List[Dict[str, any]]:
-        """Get list of competitors to monitor."""
-        return self.config['competitors']
+        """Get list of competitors to monitor from targets.yml."""
+        targets_path = self.config_path.parent / "targets.yml"
+        with open(targets_path, 'r') as f:
+            targets_config = yaml.safe_load(f)
+        return targets_config['competitors']

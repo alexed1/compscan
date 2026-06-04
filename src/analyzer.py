@@ -1,0 +1,84 @@
+"""
+AI-powered competitive intelligence analysis for the competitor monitoring tool.
+"""
+import logging
+from typing import List
+from anthropic import Anthropic
+from openai import OpenAI
+
+from models import CompetitorChange
+
+logger = logging.getLogger(__name__)
+
+
+class CompetitiveIntelligenceAnalyzer:
+    """Analyzes changes using AI (Anthropic or OpenAI)."""
+
+    def __init__(self, provider: str, api_key: str, model: str, max_tokens: int):
+        self.provider = provider.lower()
+        self.model = model
+        self.max_tokens = max_tokens
+
+        if self.provider == "anthropic":
+            self.client = Anthropic(api_key=api_key)
+        elif self.provider == "openai":
+            self.client = OpenAI(api_key=api_key)
+        else:
+            raise ValueError(f"Unsupported AI provider: {provider}. Use 'anthropic' or 'openai'.")
+
+    def analyze_changes(self, changes: List[CompetitorChange]) -> str:
+        """Analyze detected changes and generate insights."""
+        if not changes:
+            return "No changes detected in this monitoring cycle."
+
+        # Prepare summary of changes for analysis
+        changes_summary = "\n\n".join([
+            f"**{change.name}** ({change.url})\n"
+            f"Last checked: {change.last_checked}\n"
+            f"Content preview: {change.content[:500]}..."
+            for change in changes
+        ])
+
+        prompt = f"""You are a competitive intelligence analyst monitoring competitor websites for strategic changes.
+
+The following competitor websites have been updated since the last check:
+
+{changes_summary}
+
+Please analyze these changes and provide:
+1. A brief executive summary of the most important changes
+2. Key insights about what these changes might indicate (new features, pricing changes, market positioning, etc.)
+3. Potential competitive implications for our business
+4. Recommended actions or areas to investigate further
+
+Focus on actionable intelligence rather than just describing what changed."""
+
+        try:
+            if self.provider == "anthropic":
+                return self._analyze_with_anthropic(prompt)
+            elif self.provider == "openai":
+                return self._analyze_with_openai(prompt)
+        except Exception as e:
+            logger.error(f"Error calling {self.provider.title()} API: {e}")
+            return f"Error analyzing changes: {str(e)}"
+
+    def _analyze_with_anthropic(self, prompt: str) -> str:
+        """Analyze using Anthropic Claude."""
+        message = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return message.content[0].text
+
+    def _analyze_with_openai(self, prompt: str) -> str:
+        """Analyze using OpenAI GPT."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[
+                {"role": "system", "content": "You are a competitive intelligence analyst monitoring competitor websites for strategic changes."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content
