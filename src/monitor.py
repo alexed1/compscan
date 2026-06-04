@@ -107,10 +107,12 @@ class SnapshotManager:
     def save_snapshot(self, competitor_name: str, url: str, content: str, content_hash: str):
         """Save new snapshot for a competitor."""
         snapshot_path = self._get_snapshot_path(competitor_name)
+        now = datetime.now(UTC)
         snapshot = {
             "name": competitor_name,
             "url": url,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": now.isoformat(),
+            "timestamp_human": now.strftime("%B %d, %Y at %I:%M %p UTC"),
             "content_hash": content_hash,
             "content": content[:10000]  # Store first 10k chars for reference
         }
@@ -227,16 +229,39 @@ class EmailReporter:
 
     def _generate_html_digest(self, changes: List[Dict], analysis: str, timestamp: str) -> str:
         """Generate HTML email digest."""
-        changes_html = ""
+        # Build table rows for changes
+        changes_rows = ""
         for change in changes:
-            changes_html += f"""
-            <div style="margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-left: 4px solid #2563eb;">
-                <h3 style="margin-top: 0; color: #1e40af;">{change['name']}</h3>
-                <p style="margin: 5px 0;"><strong>URL:</strong> <a href="{change['url']}">{change['url']}</a></p>
-                <p style="margin: 5px 0;"><strong>Last Checked:</strong> {change.get('last_checked', 'Never')}</p>
-                <p style="margin: 5px 0;"><strong>Status:</strong> <span style="color: #dc2626;">Changed</span></p>
-            </div>
+            # Extract company name (everything before " - ")
+            company_name = change['name'].split(' - ')[0] if ' - ' in change['name'] else change['name']
+            page_name = change['name'].split(' - ', 1)[1] if ' - ' in change['name'] else 'Homepage'
+
+            changes_rows += f"""
+                <tr>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{company_name}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{page_name}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+                        <a href="{change['url']}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
+                            View Page →
+                        </a>
+                    </td>
+                </tr>
             """
+
+        changes_html = f"""
+        <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #e5e7eb; margin: 15px 0;">
+            <thead>
+                <tr style="background-color: #f9fafb;">
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">Company</th>
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">Page</th>
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">URL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {changes_rows}
+            </tbody>
+        </table>
+        """
 
         # Convert markdown analysis to HTML
         analysis_html = markdown.markdown(
@@ -317,9 +342,11 @@ class EmailReporter:
             print("No changes to report, skipping email")
             return True
 
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(UTC)
+        timestamp = now.strftime("%B %d, %Y at %I:%M %p UTC")
+        timestamp_short = now.strftime("%b %d, %Y")
         html_content = self._generate_html_digest(changes, analysis, timestamp)
-        subject = f"{subject_prefix} {len(changes)} change(s) detected - {timestamp}"
+        subject = f"{subject_prefix} {len(changes)} change(s) detected - {timestamp_short}"
 
         try:
             for to_email in self.to_emails:
@@ -416,11 +443,16 @@ async def main():
 
         if has_changed:
             old_snapshot = snapshot_manager.load_snapshot(name)
+            # Use human-readable timestamp if available, otherwise fall back to ISO timestamp
+            last_checked = 'Never'
+            if old_snapshot:
+                last_checked = old_snapshot.get('timestamp_human', old_snapshot.get('timestamp', 'Never'))
+
             changes.append({
                 "name": name,
                 "url": url,
                 "content": content,
-                "last_checked": old_snapshot.get('timestamp', 'Never') if old_snapshot else 'Never'
+                "last_checked": last_checked
             })
 
     # Analyze changes with AI
