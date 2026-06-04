@@ -44,14 +44,11 @@ class CompetitiveIntelligenceAnalyzer:
 The following competitor websites have been updated since the last check:
 
 {changes_summary}
+For each changed page, Summarize the new or changed content compared to the previous version of the page.
 
-Please analyze these changes and provide:
-1. A brief executive summary of the most important changes
-2. Key insights about what these changes might indicate (new features, pricing changes, market positioning, etc.)
-3. Potential competitive implications for our business
-4. Recommended actions or areas to investigate further
+For blog pages, create a list of new blog posts with their titles
 
-Focus on actionable intelligence rather than just describing what changed."""
+ """
 
         try:
             if self.provider == "anthropic":
