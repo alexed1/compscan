@@ -1,0 +1,53 @@
+"""
+Configuration management for the competitor monitoring tool.
+"""
+from pathlib import Path
+from typing import Dict, List
+import yaml
+
+
+class ConfigManager:
+    """Manages configuration loading and validation."""
+
+    def __init__(self, config_path: Path):
+        self.config_path = config_path
+        self.config = self._load_config()
+
+    def _load_config(self) -> dict:
+        """Load configuration from YAML file."""
+        with open(self.config_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    def get_ai_provider(self) -> str:
+        """Get configured AI provider name."""
+        return self.config['ai']['provider'].lower()
+
+    def get_ai_config(self) -> Dict[str, any]:
+        """Get AI provider configuration."""
+        provider = self.get_ai_provider()
+        return {
+            'provider': provider,
+            'model': self.config['ai'][provider]['model'],
+            'max_tokens': self.config['ai'][provider]['max_tokens']
+        }
+
+    def get_monitoring_config(self) -> Dict[str, any]:
+        """Get monitoring settings."""
+        return {
+            'user_agent': self.config['monitoring']['user_agent'],
+            'timeout': self.config['monitoring']['timeout'],
+            'check_interval': self.config['monitoring']['check_interval']
+        }
+
+    def get_email_config(self) -> Dict[str, any]:
+        """Get email configuration."""
+        return {
+            'from_email': self.config['email']['from_email'],
+            'from_name': self.config['email']['from_name'],
+            'to_emails': self.config['email']['to_emails'],
+            'subject_prefix': self.config['email']['subject_prefix']
+        }
+
+    def get_competitors(self) -> List[Dict[str, any]]:
+        """Get list of competitors to monitor."""
+        return self.config['competitors']

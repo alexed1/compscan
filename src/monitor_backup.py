@@ -4,31 +4,20 @@ Competitor Website Monitoring Tool
 Scrapes competitor websites, detects changes, analyzes with AI, and sends email alerts.
 """
 
+import os
 import json
 import hashlib
 import asyncio
-import logging
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+import yaml
 import httpx
 from playwright.async_api import async_playwright
 from anthropic import Anthropic
 from openai import OpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import resend
 import markdown
-
-from config_manager import ConfigManager
-from environment_manager import EnvironmentManager
-from models import CompetitorChange
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 class WebScraper:
@@ -38,14 +27,8 @@ class WebScraper:
         self.user_agent = user_agent
         self.timeout = timeout
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
-        reraise=True
-    )
     async def scrape_with_httpx(self, url: str) -> Optional[str]:
-        """Scrape a URL using httpx (for static pages) with retry logic."""
+        """Scrape a URL using httpx (for static pages)."""
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {"User-Agent": self.user_agent}
@@ -53,7 +36,7 @@ class WebScraper:
                 response.raise_for_status()
                 return response.text
         except Exception as e:
-            logger.warning(f"httpx scraping failed for {url}: {e}")
+            print(f"httpx scraping failed for {url}: {e}")
             return None
 
     async def scrape_with_playwright(self, url: str) -> Optional[str]:
@@ -70,21 +53,21 @@ class WebScraper:
                 await browser.close()
                 return content
         except Exception as e:
-            logger.error(f"Playwright scraping failed for {url}: {e}")
+            print(f"Playwright scraping failed for {url}: {e}")
             return None
 
     async def scrape(self, url: str, requires_js: bool = False) -> Optional[str]:
         """Scrape a URL, using appropriate method based on JS requirement."""
         if requires_js:
-            logger.info(f"Scraping {url} with Playwright (JS required)...")
+            print(f"Scraping {url} with Playwright (JS required)...")
             return await self.scrape_with_playwright(url)
 
-        logger.info(f"Scraping {url} with httpx...")
+        print(f"Scraping {url} with httpx...")
         content = await self.scrape_with_httpx(url)
 
         # Fallback to Playwright if httpx fails
         if content is None:
-            logger.info(f"Falling back to Playwright for {url}...")
+            print(f"Falling back to Playwright for {url}...")
             content = await self.scrape_with_playwright(url)
 
         return content
@@ -118,7 +101,7 @@ class SnapshotManager:
                 with open(snapshot_path, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                logger.error(f"Error loading snapshot for {competitor_name}: {e}")
+                print(f"Error loading snapshot for {competitor_name}: {e}")
         return None
 
     def save_snapshot(self, competitor_name: str, url: str, content: str, content_hash: str):
@@ -146,7 +129,7 @@ class SnapshotManager:
         old_snapshot = self.load_snapshot(competitor_name)
 
         if old_snapshot is None:
-            logger.info(f"No previous snapshot found for {competitor_name} - treating as new")
+            print(f"No previous snapshot found for {competitor_name} - treating as new")
             self.save_snapshot(competitor_name, url, content, content_hash)
             return True, None
 
@@ -154,10 +137,10 @@ class SnapshotManager:
         has_changed = content_hash != old_hash
 
         if has_changed:
-            logger.info(f"Change detected for {competitor_name}!")
+            print(f"Change detected for {competitor_name}!")
             self.save_snapshot(competitor_name, url, content, content_hash)
         else:
-            logger.debug(f"No change detected for {competitor_name}")
+            print(f"No change detected for {competitor_name}")
 
         return has_changed, old_hash
 
@@ -177,16 +160,16 @@ class CompetitiveIntelligenceAnalyzer:
         else:
             raise ValueError(f"Unsupported AI provider: {provider}. Use 'anthropic' or 'openai'.")
 
-    def analyze_changes(self, changes: List[CompetitorChange]) -> str:
+    def analyze_changes(self, changes: List[Dict]) -> str:
         """Analyze detected changes and generate insights."""
         if not changes:
             return "No changes detected in this monitoring cycle."
 
         # Prepare summary of changes for analysis
         changes_summary = "\n\n".join([
-            f"**{change.name}** ({change.url})\n"
-            f"Last checked: {change.last_checked}\n"
-            f"Content preview: {change.content[:500]}..."
+            f"**{change['name']}** ({change['url']})\n"
+            f"Last checked: {change.get('last_checked', 'Never')}\n"
+            f"Content preview: {change['content'][:500]}..."
             for change in changes
         ])
 
@@ -210,7 +193,7 @@ Focus on actionable intelligence rather than just describing what changed."""
             elif self.provider == "openai":
                 return self._analyze_with_openai(prompt)
         except Exception as e:
-            logger.error(f"Error calling {self.provider.title()} API: {e}")
+            print(f"Error calling {self.provider.title()} API: {e}")
             return f"Error analyzing changes: {str(e)}"
 
     def _analyze_with_anthropic(self, prompt: str) -> str:
@@ -244,23 +227,28 @@ class EmailReporter:
         self.from_name = from_name
         self.to_emails = to_emails
 
-    def _generate_changes_table(self, changes: List[CompetitorChange]) -> str:
-        """Generate HTML table for detected changes."""
+    def _generate_html_digest(self, changes: List[Dict], analysis: str, timestamp: str) -> str:
+        """Generate HTML email digest."""
+        # Build table rows for changes
         changes_rows = ""
         for change in changes:
+            # Extract company name (everything before " - ")
+            company_name = change['name'].split(' - ')[0] if ' - ' in change['name'] else change['name']
+            page_name = change['name'].split(' - ', 1)[1] if ' - ' in change['name'] else 'Homepage'
+
             changes_rows += f"""
                 <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{change.company_name}</td>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{change.page_name}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{company_name}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{page_name}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                        <a href="{change.url}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
+                        <a href="{change['url']}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
                             View Page →
                         </a>
                     </td>
                 </tr>
             """
 
-        return f"""
+        changes_html = f"""
         <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #e5e7eb; margin: 15px 0;">
             <thead>
                 <tr style="background-color: #f9fafb;">
@@ -275,44 +263,6 @@ class EmailReporter:
         </table>
         """
 
-    def _generate_email_styles(self) -> str:
-        """Generate CSS styles for email."""
-        return """
-            <style>
-                .analysis-content h2 {
-                    color: #1e40af;
-                    font-size: 1.25em;
-                    margin-top: 1.5em;
-                    margin-bottom: 0.5em;
-                }
-                .analysis-content h3 {
-                    color: #1f2937;
-                    font-size: 1.1em;
-                    margin-top: 1em;
-                    margin-bottom: 0.5em;
-                }
-                .analysis-content ul, .analysis-content ol {
-                    margin: 0.5em 0;
-                    padding-left: 1.5em;
-                }
-                .analysis-content li {
-                    margin: 0.25em 0;
-                }
-                .analysis-content p {
-                    margin: 0.75em 0;
-                }
-                .analysis-content strong {
-                    color: #1f2937;
-                    font-weight: 600;
-                }
-            </style>
-        """
-
-    def _generate_html_digest(self, changes: List[CompetitorChange], analysis: str, timestamp: str) -> str:
-        """Generate HTML email digest."""
-        changes_table = self._generate_changes_table(changes)
-        styles = self._generate_email_styles()
-
         # Convert markdown analysis to HTML
         analysis_html = markdown.markdown(
             analysis,
@@ -325,7 +275,34 @@ class EmailReporter:
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            {styles}
+            <style>
+                .analysis-content h2 {{
+                    color: #1e40af;
+                    font-size: 1.25em;
+                    margin-top: 1.5em;
+                    margin-bottom: 0.5em;
+                }}
+                .analysis-content h3 {{
+                    color: #1f2937;
+                    font-size: 1.1em;
+                    margin-top: 1em;
+                    margin-bottom: 0.5em;
+                }}
+                .analysis-content ul, .analysis-content ol {{
+                    margin: 0.5em 0;
+                    padding-left: 1.5em;
+                }}
+                .analysis-content li {{
+                    margin: 0.25em 0;
+                }}
+                .analysis-content p {{
+                    margin: 0.75em 0;
+                }}
+                .analysis-content strong {{
+                    color: #1f2937;
+                    font-weight: 600;
+                }}
+            </style>
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
             <div style="background-color: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
@@ -338,7 +315,7 @@ class EmailReporter:
                     Changes Detected: {len(changes)}
                 </h2>
 
-                {changes_table}
+                {changes_html}
 
                 <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-top: 30px;">
                     AI Analysis & Insights
@@ -350,7 +327,7 @@ class EmailReporter:
 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 14px;">
                     <p>Generated by Competitor Monitoring Tool</p>
-                    <p>Powered by AI</p>
+                    <p>Powered by Claude AI</p>
                 </div>
             </div>
         </body>
@@ -359,10 +336,10 @@ class EmailReporter:
 
         return html
 
-    def send_digest(self, changes: List[CompetitorChange], analysis: str, subject_prefix: str) -> bool:
+    def send_digest(self, changes: List[Dict], analysis: str, subject_prefix: str) -> bool:
         """Send email digest with changes and analysis."""
         if not changes:
-            logger.info("No changes to report, skipping email")
+            print("No changes to report, skipping email")
             return True
 
         now = datetime.now(UTC)
@@ -381,70 +358,84 @@ class EmailReporter:
                 }
 
                 resend.Emails.send(params)
-                logger.info(f"Email sent successfully to {to_email}")
+                print(f"Email sent successfully to {to_email}")
 
             return True
         except Exception as e:
-            logger.error(f"Error sending email: {e}")
+            print(f"Error sending email: {e}")
             return False
 
 
 async def main():
     """Main monitoring function."""
-    logger.info(f"Starting competitor monitoring at {datetime.now(UTC).isoformat()}")
+    print(f"Starting competitor monitoring at {datetime.now(UTC).isoformat()}")
 
-    # Load configuration using ConfigManager
+    # Load configuration
     config_path = Path(__file__).parent.parent / "config.yaml"
-    config_manager = ConfigManager(config_path)
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
 
-    # Get API keys using EnvironmentManager
-    ai_provider = config_manager.get_ai_provider()
-    ai_api_key = EnvironmentManager.get_ai_api_key(ai_provider)
-    resend_api_key = EnvironmentManager.get_resend_api_key()
+    # Get API keys from environment
+    ai_provider = config['ai']['provider'].lower()
+    resend_api_key = os.getenv("RESEND_API_KEY")
 
-    # Get configuration
-    ai_config = config_manager.get_ai_config()
-    monitoring_config = config_manager.get_monitoring_config()
-    email_config = config_manager.get_email_config()
+    if not resend_api_key:
+        raise ValueError("RESEND_API_KEY environment variable not set")
 
-    logger.info(f"Using AI provider: {ai_provider.title()} ({ai_config['model']})")
+    # Get appropriate AI API key based on provider
+    if ai_provider == "anthropic":
+        ai_api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not ai_api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        ai_model = config['ai']['anthropic']['model']
+        ai_max_tokens = config['ai']['anthropic']['max_tokens']
+    elif ai_provider == "openai":
+        ai_api_key = os.getenv("OPENAI_API_KEY")
+        if not ai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set")
+        ai_model = config['ai']['openai']['model']
+        ai_max_tokens = config['ai']['openai']['max_tokens']
+    else:
+        raise ValueError(f"Unsupported AI provider in config: {ai_provider}")
+
+    print(f"Using AI provider: {ai_provider.title()} ({ai_model})")
 
     # Initialize components
     snapshots_dir = Path(__file__).parent.parent / "snapshots"
     scraper = WebScraper(
-        user_agent=monitoring_config['user_agent'],
-        timeout=monitoring_config['timeout']
+        user_agent=config['monitoring']['user_agent'],
+        timeout=config['monitoring']['timeout']
     )
     snapshot_manager = SnapshotManager(snapshots_dir)
     analyzer = CompetitiveIntelligenceAnalyzer(
-        provider=ai_config['provider'],
+        provider=ai_provider,
         api_key=ai_api_key,
-        model=ai_config['model'],
-        max_tokens=ai_config['max_tokens']
+        model=ai_model,
+        max_tokens=ai_max_tokens
     )
     reporter = EmailReporter(
         api_key=resend_api_key,
-        from_email=email_config['from_email'],
-        from_name=email_config['from_name'],
-        to_emails=email_config['to_emails']
+        from_email=config['email']['from_email'],
+        from_name=config['email']['from_name'],
+        to_emails=config['email']['to_emails']
     )
 
     # Monitor each competitor
-    changes: List[CompetitorChange] = []
-    for competitor in config_manager.get_competitors():
+    changes = []
+    for competitor in config['competitors']:
         name = competitor['name']
         url = competitor['url']
         requires_js = competitor.get('requires_js', False)
 
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Monitoring: {name}")
-        logger.info(f"{'='*60}")
+        print(f"\n{'='*60}")
+        print(f"Monitoring: {name}")
+        print(f"{'='*60}")
 
         # Scrape the website
         content = await scraper.scrape(url, requires_js)
 
         if content is None:
-            logger.warning(f"Failed to scrape {name}, skipping...")
+            print(f"Failed to scrape {name}, skipping...")
             continue
 
         # Detect changes
@@ -457,29 +448,28 @@ async def main():
             if old_snapshot:
                 last_checked = old_snapshot.get('timestamp_human', old_snapshot.get('timestamp', 'Never'))
 
-            change = CompetitorChange(
-                name=name,
-                url=url,
-                content=content,
-                last_checked=last_checked
-            )
-            changes.append(change)
+            changes.append({
+                "name": name,
+                "url": url,
+                "content": content,
+                "last_checked": last_checked
+            })
 
     # Analyze changes with AI
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Analyzing changes with AI...")
-    logger.info(f"{'='*60}")
+    print(f"\n{'='*60}")
+    print(f"Analyzing changes with Claude AI...")
+    print(f"{'='*60}")
     analysis = analyzer.analyze_changes(changes)
-    logger.info(f"\nAnalysis:\n{analysis}\n")
+    print(f"\nAnalysis:\n{analysis}\n")
 
     # Send email digest
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Sending email digest...")
-    logger.info(f"{'='*60}")
-    reporter.send_digest(changes, analysis, email_config['subject_prefix'])
+    print(f"\n{'='*60}")
+    print(f"Sending email digest...")
+    print(f"{'='*60}")
+    reporter.send_digest(changes, analysis, config['email']['subject_prefix'])
 
-    logger.info(f"\nMonitoring complete at {datetime.now(UTC).isoformat()}")
-    logger.info(f"Total changes detected: {len(changes)}")
+    print(f"\nMonitoring complete at {datetime.now(UTC).isoformat()}")
+    print(f"Total changes detected: {len(changes)}")
 
 
 if __name__ == "__main__":
