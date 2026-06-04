@@ -1,0 +1,15 @@
+# Web scraping
+httpx>=0.27.0
+playwright>=1.40.0
+
+# Configuration
+pyyaml>=6.0.1
+
+# AI Analysis
+anthropic>=0.39.0
+
+# Email
+resend>=2.4.0
+
+# Utilities
+python-dateutil>=2.8.2
