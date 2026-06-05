@@ -63,6 +63,7 @@ jobs:
           if [[ -n $(git status --porcelain snapshots/) ]]; then
             git add snapshots/
             git commit -m "Update snapshots - $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin main
             git push
             echo "Snapshots updated and committed"
           else
