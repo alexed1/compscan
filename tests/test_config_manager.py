@@ -115,3 +115,23 @@ def test_missing_required_key_raises(config_dir):
     cm = ConfigManager(path)
     with pytest.raises(KeyError):
         cm.get_ai_provider()
+
+
+def test_get_ai_config_includes_system_prompt(config_dir):
+    data = {**MINIMAL_CONFIG, "ai": {**MINIMAL_CONFIG["ai"], "system_prompt": "Custom prompt"}}
+    path = write_config(config_dir, data)
+    cm = ConfigManager(path)
+    assert cm.get_ai_config()["system_prompt"] == "Custom prompt"
+
+
+def test_get_ai_config_system_prompt_defaults_to_empty(config_dir):
+    path = write_config(config_dir, MINIMAL_CONFIG)  # no system_prompt key
+    cm = ConfigManager(path)
+    assert cm.get_ai_config()["system_prompt"] == ""
+
+
+def test_snapshot_content_limit_explicit_value(config_dir):
+    data = {**MINIMAL_CONFIG, "monitoring": {**MINIMAL_CONFIG["monitoring"], "snapshot_content_limit": 5000}}
+    path = write_config(config_dir, data)
+    cm = ConfigManager(path)
+    assert cm.get_monitoring_config()["snapshot_content_limit"] == 5000

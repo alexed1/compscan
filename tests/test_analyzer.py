@@ -28,6 +28,54 @@ def test_anthropic_provider_accepted():
     assert analyzer.provider == "anthropic"
 
 
+def test_empty_system_prompt_falls_back_to_default():
+    with patch("src.analyzer.Anthropic"):
+        from src.analyzer import _DEFAULT_SYSTEM_PROMPT
+        analyzer = CompetitiveIntelligenceAnalyzer(
+            provider="anthropic", api_key="key", model="m", max_tokens=100, system_prompt=""
+        )
+    assert analyzer.system_prompt == _DEFAULT_SYSTEM_PROMPT
+
+
+def test_whitespace_system_prompt_falls_back_to_default():
+    with patch("src.analyzer.Anthropic"):
+        from src.analyzer import _DEFAULT_SYSTEM_PROMPT
+        analyzer = CompetitiveIntelligenceAnalyzer(
+            provider="anthropic", api_key="key", model="m", max_tokens=100, system_prompt="   "
+        )
+    assert analyzer.system_prompt == _DEFAULT_SYSTEM_PROMPT
+
+
+def test_custom_system_prompt_used_for_anthropic():
+    with patch("src.analyzer.Anthropic") as mock_cls:
+        mock_client = MagicMock()
+        mock_cls.return_value = mock_client
+        analyzer = CompetitiveIntelligenceAnalyzer(
+            provider="anthropic", api_key="key", model="m", max_tokens=100,
+            system_prompt="Custom prompt"
+        )
+    mock_client.messages.create.return_value.content = [MagicMock(text="ok")]
+    analyzer.analyze_changes([make_change()])
+    assert mock_client.messages.create.call_args[1]["system"] == "Custom prompt"
+
+
+def test_custom_system_prompt_used_for_openai():
+    with patch("src.analyzer.OpenAI") as mock_cls:
+        mock_client = MagicMock()
+        mock_cls.return_value = mock_client
+        analyzer = CompetitiveIntelligenceAnalyzer(
+            provider="openai", api_key="key", model="m", max_tokens=100,
+            system_prompt="Custom prompt"
+        )
+    mock_client.chat.completions.create.return_value.choices = [
+        MagicMock(message=MagicMock(content="ok"))
+    ]
+    analyzer.analyze_changes([make_change()])
+    messages = mock_client.chat.completions.create.call_args[1]["messages"]
+    system_msg = next(m for m in messages if m["role"] == "system")
+    assert system_msg["content"] == "Custom prompt"
+
+
 def test_openai_provider_accepted():
     with patch("src.analyzer.OpenAI"):
         analyzer = CompetitiveIntelligenceAnalyzer(

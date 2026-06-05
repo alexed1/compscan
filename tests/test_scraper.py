@@ -210,3 +210,29 @@ def test_extract_returns_string(scraper):
     result = scraper.extract_meaningful_content(html)
     assert isinstance(result, str)
     assert len(result) > 0
+
+
+def test_extract_filters_copyright_lines(scraper):
+    html = "<html><body><p>Great product content</p><p>© 2024 Acme Corp</p></body></html>"
+    result = scraper.extract_meaningful_content(html)
+    assert "Great product content" in result
+    assert "© 2024" not in result
+
+
+def test_extract_filters_all_rights_reserved(scraper):
+    html = "<html><body><p>Useful page text here</p><p>All rights reserved</p></body></html>"
+    result = scraper.extract_meaningful_content(html)
+    assert "Useful page text here" in result
+    assert "All rights reserved" not in result
+
+
+def test_extract_keeps_long_single_word(scraper):
+    html = "<html><body><p>Supercalifragilistic</p><p>Other content here</p></body></html>"
+    result = scraper.extract_meaningful_content(html)
+    assert "Supercalifragilistic" in result
+
+
+def test_extract_keeps_short_multiword_line(scraper):
+    html = "<html><body><p>Sign in</p><p>Other content here</p></body></html>"
+    result = scraper.extract_meaningful_content(html)
+    assert "Sign in" in result

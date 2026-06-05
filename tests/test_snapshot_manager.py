@@ -149,3 +149,43 @@ def test_get_snapshot_path(snapshot_manager):
     assert path.parent == snapshot_manager.snapshots_dir
     assert path.name == "test_competitor.json"
     assert path.suffix == ".json"
+
+
+def test_load_snapshot_handles_corrupt_json(snapshot_manager):
+    """load_snapshot returns None and does not raise on malformed JSON."""
+    path = snapshot_manager._get_snapshot_path("Corrupt Competitor")
+    path.write_text("{ this is not valid json }")
+
+    result = snapshot_manager.load_snapshot("Corrupt Competitor")
+    assert result is None
+
+
+def test_detect_change_returns_previous_timestamp(snapshot_manager):
+    """Second detect_change call returns the timestamp from the first snapshot."""
+    name, url = "Timestamped Co - Home", "https://example.com"
+    snapshot_manager.detect_change(name, url, "first content")
+
+    has_changed, timestamp = snapshot_manager.detect_change(name, url, "second content")
+
+    assert has_changed is True
+    assert timestamp is not None
+    assert "UTC" in timestamp  # timestamp_human format contains "UTC"
+
+
+def test_custom_content_limit_respected(temp_snapshots_dir):
+    """SnapshotManager honours a non-default content_limit."""
+    sm = SnapshotManager(temp_snapshots_dir, content_limit=100)
+    content = "a" * 300
+    sm.save_snapshot("Limit Test", "https://example.com", content, sm._compute_hash(content))
+    loaded = sm.load_snapshot("Limit Test")
+    assert len(loaded["content"]) == 100
+
+
+def test_save_snapshot_timestamp_human_format(snapshot_manager):
+    """Saved snapshot includes a timestamp_human in the expected readable format."""
+    import re
+    snapshot_manager.save_snapshot("Ts Test", "https://example.com", "content", "abc123")
+    loaded = snapshot_manager.load_snapshot("Ts Test")
+    ts = loaded["timestamp_human"]
+    # e.g. "June 05, 2026 at 03:15 AM UTC"
+    assert re.match(r"\w+ \d{2}, \d{4} at \d{2}:\d{2} [AP]M UTC", ts), f"Unexpected format: {ts}"

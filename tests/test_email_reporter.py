@@ -41,8 +41,20 @@ def test_generate_html_digest_no_changes(email_reporter):
 
     assert "Competitor Intelligence Report" in html
     assert "2024-01-15 12:00 UTC" in html
-    assert "Changes Detected: 0" in html
+    assert "All Clear" in html
     assert "No changes detected." in html
+    assert "Changes Detected: 0" not in html
+
+
+def test_generate_html_digest_no_changes_green_header(email_reporter):
+    html = email_reporter._generate_html_digest([], "Analysis text", "2024-01-15 12:00 UTC")
+    assert "#10b981" in html
+    assert "#2563eb" not in html
+
+
+def test_generate_html_digest_with_changes_blue_header(email_reporter):
+    html = email_reporter._generate_html_digest([make_change()], "Analysis text", "2024-01-15 12:00 UTC")
+    assert "#2563eb" in html
 
 
 def test_generate_html_digest_with_changes(email_reporter):
@@ -121,9 +133,16 @@ def test_generate_html_digest_escapes_competitor_name(email_reporter):
 # send_digest
 # ---------------------------------------------------------------------------
 
-def test_send_digest_no_changes(email_reporter):
-    result = email_reporter.send_digest([], "No changes", "[Test]")
+def test_send_digest_no_changes_still_sends(email_reporter):
+    with patch('resend.Emails.send') as mock_send:
+        mock_send.return_value = {"id": "email_123"}
+        result = email_reporter.send_digest([], "No changes", "[Test]")
+
     assert result is True
+    mock_send.assert_called_once()
+    subject = mock_send.call_args[0][0]['subject']
+    assert "No changes detected" in subject
+    assert "change(s) detected" not in subject
 
 
 def test_send_digest_success(email_reporter):
