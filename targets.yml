@@ -16,6 +16,10 @@ competitors:
     url: "https://www.vertexinc.com/solutions"
     requires_js: false
 
+  - name: "Vertex - Blog"
+    url: "https://www.vertexinc.com/resources/blog"
+    requires_js: true
+
   - name: "Vertex - News"
     url: "https://www.vertexinc.com/company/news/latest-news"
     requires_js: false
@@ -28,6 +32,10 @@ competitors:
     url: "https://tax.thomsonreuters.com/en/onesource/indirect-tax/compliance"
     requires_js: false
 
+  - name: "Thomson Reuters - Press Releases"
+    url: "https://www.thomsonreuters.com/en/press-releases"
+    requires_js: true
+
   - name: "Sovos - Homepage"
     url: "https://sovos.com"
     requires_js: false
@@ -39,6 +47,14 @@ competitors:
   - name: "Sovos - Compliance Cloud"
     url: "https://sovos.com/compliance-cloud/"
     requires_js: false
+
+  - name: "Sovos - Blog"
+    url: "https://sovos.com/blog"
+    requires_js: true
+
+  - name: "Sovos - Press Releases"
+    url: "https://sovos.com/press-releases"
+    requires_js: true
 
   # --- Modern/SaaS-native tier ---
 
@@ -62,6 +78,10 @@ competitors:
     url: "https://www.trykintsugi.com/product-platform"
     requires_js: true
 
+  - name: "Kintsugi - Blog"
+    url: "https://trykintsugi.com/blog"
+    requires_js: true
+
   - name: "Sphere - Homepage"
     url: "https://www.getsphere.com"
     requires_js: true
@@ -77,3 +97,7 @@ competitors:
   - name: "Numeral - Solutions"
     url: "https://www.numeralhq.com/solutions/saas"
     requires_js: false
+
+  - name: "Numeral - Blog"
+    url: "https://www.numeral.com/blog"
+    requires_js: true
