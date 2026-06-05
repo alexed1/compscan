@@ -60,17 +60,33 @@ competitors:
 
 ### 4. Set Up API Keys
 
-You need two API keys:
+You need API keys for your chosen AI provider and email service:
 
-1. **Anthropic API Key**: Get it from [console.anthropic.com](https://console.anthropic.com)
+1. **AI Provider** (choose one):
+   - **Anthropic API Key**: Get it from [console.anthropic.com](https://console.anthropic.com)
+   - **OpenAI API Key**: Get it from [platform.openai.com](https://platform.openai.com)
 2. **Resend API Key**: Get it from [resend.com](https://resend.com)
 
 #### For Local Testing
 
+Create a `.env` file in the project root:
+
 ```bash
-export ANTHROPIC_API_KEY="your-anthropic-api-key"
-export RESEND_API_KEY="your-resend-api-key"
+cp .env.example .env
 ```
+
+Then edit `.env` and add your actual API keys:
+
+```bash
+# Choose your AI provider (Anthropic or OpenAI)
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+OPENAI_API_KEY=your-openai-api-key-here
+
+# Email service (required)
+RESEND_API_KEY=your-resend-api-key-here
+```
+
+**Note**: The `.env` file is gitignored and will never be committed to version control.
 
 #### For GitHub Actions
 
@@ -79,7 +95,7 @@ Add these as repository secrets:
 1. Go to your GitHub repository
 2. Navigate to Settings > Secrets and variables > Actions
 3. Add the following secrets:
-   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (depending on your choice in config.yaml)
    - `RESEND_API_KEY`
 
 ### 5. Configure Email Settings

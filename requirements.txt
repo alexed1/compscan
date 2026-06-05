@@ -17,6 +17,7 @@ resend>=2.4.0
 python-dateutil>=2.8.2
 markdown>=3.5
 tenacity>=8.2.0
+python-dotenv>=1.0.0
 
 # Testing
 pytest>=8.0.0
