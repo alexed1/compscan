@@ -63,7 +63,19 @@ jobs:
           if [[ -n $(git status --porcelain snapshots/) ]]; then
             git add snapshots/
             git commit -m "Update snapshots - $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git pull --rebase origin main
+
+            # Pull latest changes and handle conflicts
+            git fetch origin main
+
+            # If rebase fails due to conflicts, use ours strategy (prefer our snapshots)
+            if ! git pull --rebase origin main; then
+              echo "Rebase failed, using ours strategy to resolve conflicts"
+              git rebase --abort
+              git pull origin main --no-rebase --strategy-option=ours
+              git add snapshots/
+              git commit --amend --no-edit
+            fi
+
             git push
             echo "Snapshots updated and committed"
           else
