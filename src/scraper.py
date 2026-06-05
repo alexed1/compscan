@@ -45,7 +45,8 @@ class WebScraper:
         for tag in soup.find_all(attrs={"class": lambda x: x and any(
             keyword in str(x).lower() for keyword in [
                 "analytics", "tracking", "cookie", "consent",
-                "nav", "header", "footer", "menu", "sidebar"
+                "nav", "header", "footer", "menu", "sidebar",
+                "testimonial", "review", "carousel", "slider", "rotating"
             ]
         )}):
             tag.decompose()
@@ -76,7 +77,11 @@ class WebScraper:
                 continue
             if line.replace('-', '').replace(':', '').replace('.', '').isdigit():
                 continue
-            if any(pattern in line.lower() for pattern in ['© 20', 'all rights reserved', 'cookie preferences']):
+            if any(pattern in line.lower() for pattern in [
+                '© 20', 'all rights reserved', 'cookie preferences',
+                'product of the', 'customer of the', 'featured on',
+                'as seen on', 'trusted by'
+            ]):
                 continue
             if len(line.split()) == 1 and len(line) < _MAX_SINGLE_WORD_LENGTH:
                 continue
