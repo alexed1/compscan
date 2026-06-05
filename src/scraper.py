@@ -7,6 +7,7 @@ import httpx
 from playwright.async_api import async_playwright
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from bs4 import BeautifulSoup
+from blog_extractor import BlogExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class WebScraper:
     def __init__(self, user_agent: str, timeout: int):
         self.user_agent = user_agent
         self.timeout = timeout
+        self.blog_extractor = BlogExtractor()
 
     def extract_meaningful_content(self, html: str) -> str:
         """Extract only meaningful content from HTML, ignoring scripts, styles, and metadata."""
@@ -134,7 +136,12 @@ class WebScraper:
                 logger.info(f"Falling back to Playwright for {url}...")
                 html = await self.scrape_with_playwright(url)
 
-        # Extract only meaningful content
+        # Extract meaningful content based on page type
         if html:
-            return self.extract_meaningful_content(html)
+            # Use specialized blog extraction for blog/resource pages
+            if self.blog_extractor.is_blog_page(url):
+                logger.info(f"Using blog extraction for {url}")
+                return self.blog_extractor.extract_blog_posts(html)
+            else:
+                return self.extract_meaningful_content(html)
         return None
