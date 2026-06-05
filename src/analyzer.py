@@ -10,14 +10,22 @@ from models import CompetitorChange
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are a competitive intelligence analyst monitoring competitor websites for strategic changes. "
+    "For each changed page, summarize the new or changed content compared to the previous version of the page. "
+    "For blog pages, create a list of new blog posts with their titles."
+)
+
 
 class CompetitiveIntelligenceAnalyzer:
     """Analyzes changes using AI (Anthropic or OpenAI)."""
 
-    def __init__(self, provider: str, api_key: str, model: str, max_tokens: int):
+    def __init__(self, provider: str, api_key: str, model: str, max_tokens: int,
+                 system_prompt: str = ""):
         self.provider = provider.lower()
         self.model = model
         self.max_tokens = max_tokens
+        self.system_prompt = system_prompt.strip() or _DEFAULT_SYSTEM_PROMPT
 
         if self.provider == "anthropic":
             self.client = Anthropic(api_key=api_key)
@@ -31,7 +39,6 @@ class CompetitiveIntelligenceAnalyzer:
         if not changes:
             return "No changes detected in this monitoring cycle."
 
-        # Prepare summary of changes for analysis
         changes_summary = "\n\n".join([
             f"**{change.name}** ({change.url})\n"
             f"Last checked: {change.last_checked}\n"
@@ -39,16 +46,11 @@ class CompetitiveIntelligenceAnalyzer:
             for change in changes
         ])
 
-        prompt = f"""You are a competitive intelligence analyst monitoring competitor websites for strategic changes.
-
-The following competitor websites have been updated since the last check:
-
-{changes_summary}
-For each changed page, Summarize the new or changed content compared to the previous version of the page.
-
-For blog pages, create a list of new blog posts with their titles
-
- """
+        prompt = (
+            f"{self.system_prompt}\n\n"
+            f"The following competitor websites have been updated since the last check:\n\n"
+            f"{changes_summary}"
+        )
 
         try:
             if self.provider == "anthropic":
@@ -60,7 +62,6 @@ For blog pages, create a list of new blog posts with their titles
             return f"Error analyzing changes: {str(e)}"
 
     def _analyze_with_anthropic(self, prompt: str) -> str:
-        """Analyze using Anthropic Claude."""
         message = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -69,12 +70,11 @@ For blog pages, create a list of new blog posts with their titles
         return message.content[0].text
 
     def _analyze_with_openai(self, prompt: str) -> str:
-        """Analyze using OpenAI GPT."""
         response = self.client.chat.completions.create(
             model=self.model,
             max_tokens=self.max_tokens,
             messages=[
-                {"role": "system", "content": "You are a competitive intelligence analyst monitoring competitor websites for strategic changes."},
+                {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": prompt}
             ]
         )

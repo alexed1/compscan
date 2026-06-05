@@ -1,6 +1,7 @@
 """
 Email reporting functionality for the competitor monitoring tool.
 """
+import html as html_lib
 import logging
 from datetime import datetime, UTC
 from typing import List
@@ -10,6 +11,37 @@ import markdown
 from models import CompetitorChange
 
 logger = logging.getLogger(__name__)
+
+_EMAIL_STYLES = """
+    <style>
+        .analysis-content h2 {
+            color: #1e40af;
+            font-size: 1.25em;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        .analysis-content h3 {
+            color: #1f2937;
+            font-size: 1.1em;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+        .analysis-content ul, .analysis-content ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        .analysis-content li {
+            margin: 0.25em 0;
+        }
+        .analysis-content p {
+            margin: 0.75em 0;
+        }
+        .analysis-content strong {
+            color: #1f2937;
+            font-weight: 600;
+        }
+    </style>
+"""
 
 
 class EmailReporter:
@@ -27,10 +59,10 @@ class EmailReporter:
         for change in changes:
             changes_rows += f"""
                 <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{change.company_name}</td>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{change.page_name}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.company_name)}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.page_name)}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                        <a href="{change.url}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
+                        <a href="{html_lib.escape(change.url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
                             View Page →
                         </a>
                     </td>
@@ -52,43 +84,10 @@ class EmailReporter:
         </table>
         """
 
-    def _generate_email_styles(self) -> str:
-        """Generate CSS styles for email."""
-        return """
-            <style>
-                .analysis-content h2 {
-                    color: #1e40af;
-                    font-size: 1.25em;
-                    margin-top: 1.5em;
-                    margin-bottom: 0.5em;
-                }
-                .analysis-content h3 {
-                    color: #1f2937;
-                    font-size: 1.1em;
-                    margin-top: 1em;
-                    margin-bottom: 0.5em;
-                }
-                .analysis-content ul, .analysis-content ol {
-                    margin: 0.5em 0;
-                    padding-left: 1.5em;
-                }
-                .analysis-content li {
-                    margin: 0.25em 0;
-                }
-                .analysis-content p {
-                    margin: 0.75em 0;
-                }
-                .analysis-content strong {
-                    color: #1f2937;
-                    font-weight: 600;
-                }
-            </style>
-        """
-
     def _generate_html_digest(self, changes: List[CompetitorChange], analysis: str, timestamp: str) -> str:
         """Generate HTML email digest."""
         changes_table = self._generate_changes_table(changes)
-        styles = self._generate_email_styles()
+        styles = _EMAIL_STYLES
 
         # Convert markdown analysis to HTML
         analysis_html = markdown.markdown(

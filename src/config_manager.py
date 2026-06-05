@@ -11,11 +11,11 @@ class ConfigManager:
 
     def __init__(self, config_path: Path):
         self.config_path = config_path
-        self.config = self._load_config()
+        self.config = self._load_yaml(config_path)
+        self._competitors = self._load_yaml(config_path.parent / "targets.yml")['competitors']
 
-    def _load_config(self) -> dict:
-        """Load configuration from YAML file."""
-        with open(self.config_path, 'r') as f:
+    def _load_yaml(self, path: Path) -> dict:
+        with open(path, 'r') as f:
             return yaml.safe_load(f)
 
     def get_ai_provider(self) -> str:
@@ -28,7 +28,8 @@ class ConfigManager:
         return {
             'provider': provider,
             'model': self.config['ai'][provider]['model'],
-            'max_tokens': self.config['ai'][provider]['max_tokens']
+            'max_tokens': self.config['ai'][provider]['max_tokens'],
+            'system_prompt': self.config['ai'].get('system_prompt', ''),
         }
 
     def get_monitoring_config(self) -> Dict[str, any]:
@@ -49,8 +50,5 @@ class ConfigManager:
         }
 
     def get_competitors(self) -> List[Dict[str, any]]:
-        """Get list of competitors to monitor from targets.yml."""
-        targets_path = self.config_path.parent / "targets.yml"
-        with open(targets_path, 'r') as f:
-            targets_config = yaml.safe_load(f)
-        return targets_config['competitors']
+        """Get list of competitors to monitor."""
+        return self._competitors

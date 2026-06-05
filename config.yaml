@@ -22,6 +22,12 @@ ai:
     model: "gpt-4o"
     max_tokens: 4096
 
+  # System prompt sent to the AI for analysis
+  system_prompt: |
+    You are a competitive intelligence analyst monitoring competitor websites for strategic changes.
+    For each changed page, summarize the new or changed content compared to the previous version of the page.
+    For blog pages, create a list of new blog posts with their titles.
+
 # Email settings
 email:
   from_email: "monitoring@edelstein.org"

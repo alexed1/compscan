@@ -61,7 +61,7 @@ class SnapshotManager:
     def detect_change(self, competitor_name: str, url: str, content: str) -> Tuple[bool, Optional[str]]:
         """
         Detect if content has changed since last snapshot.
-        Returns (has_changed, old_hash).
+        Returns (has_changed, previous_timestamp_human).
         """
         content_hash = self._compute_hash(content)
         old_snapshot = self.load_snapshot(competitor_name)
@@ -74,10 +74,12 @@ class SnapshotManager:
         old_hash = old_snapshot.get("content_hash")
         has_changed = content_hash != old_hash
 
+        previous_timestamp = old_snapshot.get('timestamp_human', old_snapshot.get('timestamp'))
+
         if has_changed:
             logger.info(f"Change detected for {competitor_name}!")
             self.save_snapshot(competitor_name, url, content, content_hash)
         else:
             logger.debug(f"No change detected for {competitor_name}")
 
-        return has_changed, old_hash
+        return has_changed, previous_timestamp

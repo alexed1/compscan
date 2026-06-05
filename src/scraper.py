@@ -30,15 +30,31 @@ class WebScraper:
         for tag in soup(["meta", "link", "head"]):
             tag.decompose()
 
+        # Remove common page chrome that changes frequently
+        # Navigation menus, headers, footers often have dynamic elements
+        for tag in soup.find_all(['nav', 'header', 'footer']):
+            tag.decompose()
+
+        # Remove common dynamic content containers
+        for tag in soup.find_all(attrs={"class": lambda x: x and any(
+            keyword in str(x).lower() for keyword in [
+                "analytics", "tracking", "cookie", "consent",
+                "nav", "header", "footer", "menu", "sidebar"
+            ]
+        )}):
+            tag.decompose()
+
+        # Remove by common ID patterns
+        for tag in soup.find_all(attrs={"id": lambda x: x and any(
+            keyword in str(x).lower() for keyword in [
+                "nav", "header", "footer", "menu", "sidebar"
+            ]
+        )}):
+            tag.decompose()
+
         # Remove comments
         for comment in soup.find_all(string=lambda text: isinstance(text, str) and text.strip().startswith('<!--')):
             comment.extract()
-
-        # Remove common dynamic content containers (e.g., analytics, tracking)
-        for tag in soup.find_all(attrs={"class": lambda x: x and any(
-            keyword in str(x).lower() for keyword in ["analytics", "tracking", "cookie", "consent"]
-        )}):
-            tag.decompose()
 
         # Extract text content
         text = soup.get_text(separator='\n', strip=True)
@@ -47,28 +63,42 @@ class WebScraper:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
 
         # Filter out lines that look like timestamps, IDs, or other dynamic content
-        # (lines that are purely numbers, UUIDs, or very short)
-        meaningful_lines = [
-            line for line in lines
-            if len(line) > 2 and not line.replace('-', '').replace(':', '').replace('.', '').isdigit()
-        ]
+        # Also filter out very common generic text and copyright notices
+        meaningful_lines = []
+        for line in lines:
+            # Skip very short lines
+            if len(line) <= 2:
+                continue
+            # Skip lines that are pure numbers/dates
+            if line.replace('-', '').replace(':', '').replace('.', '').isdigit():
+                continue
+            # Skip copyright and common footer text
+            if any(pattern in line.lower() for pattern in ['© 20', 'all rights reserved', 'cookie preferences']):
+                continue
+            # Skip single-word navigation items (likely menu items)
+            if len(line.split()) == 1 and len(line) < 20:
+                continue
+
+            meaningful_lines.append(line)
 
         return '\n'.join(meaningful_lines)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
-        reraise=True
-    )
     async def scrape_with_httpx(self, url: str) -> Optional[str]:
         """Scrape a URL using httpx (for static pages) with retry logic."""
-        try:
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=4, max=10),
+            retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
+        )
+        async def _fetch():
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 headers = {"User-Agent": self.user_agent}
                 response = await client.get(url, headers=headers, follow_redirects=True)
                 response.raise_for_status()
                 return response.text
+
+        try:
+            return await _fetch()
         except Exception as e:
             logger.warning(f"httpx scraping failed for {url}: {e}")
             return None
