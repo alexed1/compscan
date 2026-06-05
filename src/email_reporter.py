@@ -87,7 +87,6 @@ class EmailReporter:
 
     def _generate_html_digest(self, changes: List[CompetitorChange], analysis: str, timestamp: str) -> str:
         """Generate HTML email digest."""
-        changes_table = self._generate_changes_table(changes)
         styles = _EMAIL_STYLES
 
         # Convert markdown analysis to HTML
@@ -95,6 +94,25 @@ class EmailReporter:
             analysis,
             extensions=['extra', 'nl2br', 'sane_lists']
         )
+
+        # Generate content based on whether there are changes
+        if changes:
+            changes_section = f"""
+                <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
+                    Changes Detected: {len(changes)}
+                </h2>
+
+                {self._generate_changes_table(changes)}
+            """
+            header_color = "#2563eb"  # Blue for changes
+        else:
+            changes_section = f"""
+                <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
+                    <h2 style="color: #059669; margin: 0 0 10px 0;">✓ All Clear</h2>
+                    <p style="margin: 0; color: #047857;">No competitor changes detected in this monitoring cycle. All tracked pages remain unchanged.</p>
+                </div>
+            """
+            header_color = "#10b981"  # Green for no changes
 
         html = f"""
         <!DOCTYPE html>
@@ -105,17 +123,13 @@ class EmailReporter:
             {styles}
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <div style="background-color: #2563eb; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <div style="background-color: {header_color}; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
                 <h1 style="margin: 0;">Competitor Intelligence Report</h1>
                 <p style="margin: 10px 0 0 0; opacity: 0.9;">{timestamp}</p>
             </div>
 
             <div style="background-color: white; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
-                <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
-                    Changes Detected: {len(changes)}
-                </h2>
-
-                {changes_table}
+                {changes_section}
 
                 <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-top: 30px;">
                     AI Analysis & Insights
@@ -138,15 +152,16 @@ class EmailReporter:
 
     def send_digest(self, changes: List[CompetitorChange], analysis: str, subject_prefix: str) -> bool:
         """Send email digest with changes and analysis."""
-        if not changes:
-            logger.info("No changes to report, skipping email")
-            return True
-
         now = datetime.now(UTC)
         timestamp = now.strftime("%B %d, %Y at %I:%M %p UTC")
         timestamp_short = now.strftime("%b %d, %Y")
         html_content = self._generate_html_digest(changes, analysis, timestamp)
-        subject = f"{subject_prefix} {len(changes)} change(s) detected - {timestamp_short}"
+
+        # Update subject based on whether there are changes
+        if changes:
+            subject = f"{subject_prefix} {len(changes)} change(s) detected - {timestamp_short}"
+        else:
+            subject = f"{subject_prefix} No changes detected - {timestamp_short}"
 
         try:
             for to_email in self.to_emails:
