@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 class SnapshotManager:
     """Manages snapshots and detects changes using hash comparison."""
 
-    def __init__(self, snapshots_dir: Path):
+    def __init__(self, snapshots_dir: Path, content_limit: int = 10000):
         self.snapshots_dir = snapshots_dir
+        self.content_limit = content_limit
         self.snapshots_dir.mkdir(exist_ok=True)
 
     def _sanitize_name(self, name: str) -> str:
@@ -38,7 +39,7 @@ class SnapshotManager:
             try:
                 with open(snapshot_path, 'r') as f:
                     return json.load(f)
-            except Exception as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.error(f"Error loading snapshot for {competitor_name}: {e}")
         return None
 
@@ -52,7 +53,7 @@ class SnapshotManager:
             "timestamp": now.isoformat(),
             "timestamp_human": now.strftime("%B %d, %Y at %I:%M %p UTC"),
             "content_hash": content_hash,
-            "content": content[:10000]  # Store first 10k chars for reference
+            "content": content[:self.content_limit]
         }
 
         with open(snapshot_path, 'w') as f:

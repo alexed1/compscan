@@ -5,7 +5,7 @@ import pytest
 import json
 import tempfile
 from pathlib import Path
-from src.monitor import SnapshotManager
+from src.snapshot_manager import SnapshotManager
 
 
 @pytest.fixture
@@ -75,17 +75,18 @@ def test_load_nonexistent_snapshot(snapshot_manager):
 
 
 def test_save_large_content(snapshot_manager):
-    """Test that large content is truncated to 10,000 chars."""
+    """Test that large content is truncated to content_limit chars."""
     competitor_name = "Large Content Test"
     url = "https://example.com"
-    content = "x" * 20000  # 20,000 characters
+    limit = snapshot_manager.content_limit
+    content = "x" * (limit * 2)
     content_hash = snapshot_manager._compute_hash(content)
 
     snapshot_manager.save_snapshot(competitor_name, url, content, content_hash)
     loaded = snapshot_manager.load_snapshot(competitor_name)
 
-    assert len(loaded['content']) == 10000
-    assert loaded['content'] == "x" * 10000
+    assert len(loaded['content']) == limit
+    assert loaded['content'] == "x" * limit
 
 
 def test_detect_change_first_run(snapshot_manager):

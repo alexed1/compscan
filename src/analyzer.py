@@ -47,7 +47,6 @@ class CompetitiveIntelligenceAnalyzer:
         ])
 
         prompt = (
-            f"{self.system_prompt}\n\n"
             f"The following competitor websites have been updated since the last check:\n\n"
             f"{changes_summary}"
         )
@@ -65,6 +64,7 @@ class CompetitiveIntelligenceAnalyzer:
         message = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            system=self.system_prompt,
             messages=[{"role": "user", "content": prompt}]
         )
         return message.content[0].text

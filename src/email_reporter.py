@@ -55,9 +55,8 @@ class EmailReporter:
 
     def _generate_changes_table(self, changes: List[CompetitorChange]) -> str:
         """Generate HTML table for detected changes."""
-        changes_rows = ""
-        for change in changes:
-            changes_rows += f"""
+        changes_rows = "".join(
+            f"""
                 <tr>
                     <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.company_name)}</td>
                     <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.page_name)}</td>
@@ -68,6 +67,8 @@ class EmailReporter:
                     </td>
                 </tr>
             """
+            for change in changes
+        )
 
         return f"""
         <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #e5e7eb; margin: 15px 0;">

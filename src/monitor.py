@@ -47,7 +47,10 @@ async def main():
         user_agent=monitoring_config['user_agent'],
         timeout=monitoring_config['timeout']
     )
-    snapshot_manager = SnapshotManager(snapshots_dir)
+    snapshot_manager = SnapshotManager(
+        snapshots_dir,
+        content_limit=monitoring_config['snapshot_content_limit'],
+    )
     analyzer = CompetitiveIntelligenceAnalyzer(
         provider=ai_config['provider'],
         api_key=ai_api_key,

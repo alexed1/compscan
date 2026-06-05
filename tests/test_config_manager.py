@@ -81,6 +81,7 @@ def test_get_monitoring_config(config_dir):
     assert cfg["user_agent"] == "TestAgent/1.0"
     assert cfg["timeout"] == 30
     assert cfg["check_interval"] == 24
+    assert cfg["snapshot_content_limit"] == 10000  # default when not set in config
 
 
 def test_get_email_config(config_dir):

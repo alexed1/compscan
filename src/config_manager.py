@@ -2,7 +2,7 @@
 Configuration management for the competitor monitoring tool.
 """
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 import yaml
 
 
@@ -22,7 +22,7 @@ class ConfigManager:
         """Get configured AI provider name."""
         return self.config['ai']['provider'].lower()
 
-    def get_ai_config(self) -> Dict[str, any]:
+    def get_ai_config(self) -> Dict[str, Any]:
         """Get AI provider configuration."""
         provider = self.get_ai_provider()
         return {
@@ -32,15 +32,16 @@ class ConfigManager:
             'system_prompt': self.config['ai'].get('system_prompt', ''),
         }
 
-    def get_monitoring_config(self) -> Dict[str, any]:
+    def get_monitoring_config(self) -> Dict[str, Any]:
         """Get monitoring settings."""
         return {
             'user_agent': self.config['monitoring']['user_agent'],
             'timeout': self.config['monitoring']['timeout'],
-            'check_interval': self.config['monitoring']['check_interval']
+            'check_interval': self.config['monitoring']['check_interval'],
+            'snapshot_content_limit': self.config['monitoring'].get('snapshot_content_limit', 10000),
         }
 
-    def get_email_config(self) -> Dict[str, any]:
+    def get_email_config(self) -> Dict[str, Any]:
         """Get email configuration."""
         return {
             'from_email': self.config['email']['from_email'],
@@ -49,6 +50,6 @@ class ConfigManager:
             'subject_prefix': self.config['email']['subject_prefix']
         }
 
-    def get_competitors(self) -> List[Dict[str, any]]:
+    def get_competitors(self) -> List[Dict[str, Any]]:
         """Get list of competitors to monitor."""
         return self._competitors

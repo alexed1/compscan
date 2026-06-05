@@ -101,6 +101,16 @@ def test_anthropic_content_preview_capped_at_500_chars(anthropic_analyzer):
     assert "x" * 501 not in prompt
 
 
+def test_anthropic_receives_system_prompt_as_parameter(anthropic_analyzer):
+    analyzer, mock_client = anthropic_analyzer
+    mock_client.messages.create.return_value.content = [MagicMock(text="ok")]
+
+    analyzer.analyze_changes([make_change()])
+
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert call_kwargs["system"] == analyzer.system_prompt
+
+
 def test_anthropic_api_exception_returns_error_string(anthropic_analyzer):
     analyzer, mock_client = anthropic_analyzer
     mock_client.messages.create.side_effect = Exception("rate limited")

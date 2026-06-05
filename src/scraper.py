@@ -10,6 +10,10 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+_MIN_LINE_LENGTH = 3
+_MAX_SINGLE_WORD_LENGTH = 20
+_PLAYWRIGHT_TIMEOUT_MULTIPLIER = 1000
+
 
 class WebScraper:
     """Handles web scraping with httpx and Playwright fallback."""
@@ -66,17 +70,13 @@ class WebScraper:
         # Also filter out very common generic text and copyright notices
         meaningful_lines = []
         for line in lines:
-            # Skip very short lines
-            if len(line) <= 2:
+            if len(line) < _MIN_LINE_LENGTH:
                 continue
-            # Skip lines that are pure numbers/dates
             if line.replace('-', '').replace(':', '').replace('.', '').isdigit():
                 continue
-            # Skip copyright and common footer text
             if any(pattern in line.lower() for pattern in ['© 20', 'all rights reserved', 'cookie preferences']):
                 continue
-            # Skip single-word navigation items (likely menu items)
-            if len(line.split()) == 1 and len(line) < 20:
+            if len(line.split()) == 1 and len(line) < _MAX_SINGLE_WORD_LENGTH:
                 continue
 
             meaningful_lines.append(line)
@@ -111,7 +111,7 @@ class WebScraper:
                 context = await browser.new_context(user_agent=self.user_agent)
                 page = await context.new_page()
 
-                await page.goto(url, wait_until="networkidle", timeout=self.timeout * 1000)
+                await page.goto(url, wait_until="networkidle", timeout=self.timeout * _PLAYWRIGHT_TIMEOUT_MULTIPLIER)
                 content = await page.content()
 
                 await browser.close()
