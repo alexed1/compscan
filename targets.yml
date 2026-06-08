@@ -70,6 +70,18 @@ competitors:
     url: "https://www.anrok.com/resources"
     requires_js: true
 
+  - name: "Anrok - News & Resources"
+    url: "https://www.anrok.com/type/news"
+    requires_js: true
+
+  - name: "Anrok - Tax Updates"
+    url: "https://www.anrok.com/type/tax-updates"
+    requires_js: true
+
+  - name: "Anrok - Tax News Feed"
+    url: "https://www.anrok.com/tax-news"
+    requires_js: true
+
   - name: "Kintsugi - Homepage"
     url: "https://www.trykintsugi.com"
     requires_js: true
