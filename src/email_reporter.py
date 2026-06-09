@@ -4,7 +4,7 @@ Email reporting functionality for the competitor monitoring tool.
 import html as html_lib
 import logging
 from datetime import datetime, UTC
-from typing import List
+from typing import List, Dict, Union
 import resend
 import markdown
 
@@ -53,17 +53,19 @@ class EmailReporter:
         self.from_name = from_name
         self.to_emails = to_emails
 
-    def _generate_changes_table(self, changes: List[CompetitorChange]) -> str:
-        """Generate HTML table for detected changes."""
+    def _generate_changes_table(self, changes: List[CompetitorChange], change_analyses: Dict[str, str]) -> str:
+        """Generate HTML table for detected changes with inline analysis."""
         changes_rows = "".join(
             f"""
                 <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.company_name)}</td>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{html_lib.escape(change.page_name)}</td>
-                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                        <a href="{html_lib.escape(change.url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none;">
-                            View Page →
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">{html_lib.escape(change.company_name)}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
+                        <a href="{html_lib.escape(change.url)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: none; font-weight: 500;">
+                            {html_lib.escape(change.page_name)}
                         </a>
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #374151; font-size: 14px; line-height: 1.5;">
+                        {html_lib.escape(change_analyses.get(change.name, "Analysis not available"))}
                     </td>
                 </tr>
             """
@@ -74,9 +76,9 @@ class EmailReporter:
         <table style="width: 100%; border-collapse: collapse; background-color: white; border: 1px solid #e5e7eb; margin: 15px 0;">
             <thead>
                 <tr style="background-color: #f9fafb;">
-                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">Company</th>
-                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">Page</th>
-                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600;">URL</th>
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600; width: 15%;">Company</th>
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600; width: 20%;">Page</th>
+                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #1e40af; font-weight: 600; width: 65%;">Changes</th>
                 </tr>
             </thead>
             <tbody>
@@ -85,24 +87,26 @@ class EmailReporter:
         </table>
         """
 
-    def _generate_html_digest(self, changes: List[CompetitorChange], analysis: str, timestamp: str) -> str:
+    def _generate_html_digest(self, changes: List[CompetitorChange],
+                              analysis: Union[str, Dict[str, str]], timestamp: str) -> str:
         """Generate HTML email digest."""
         styles = _EMAIL_STYLES
 
-        # Convert markdown analysis to HTML
-        analysis_html = markdown.markdown(
-            analysis,
-            extensions=['extra', 'nl2br', 'sane_lists']
-        )
+        # Handle both old (string) and new (dict) analysis formats
+        if isinstance(analysis, dict):
+            change_analyses = analysis
+        else:
+            # Legacy format - create empty dict, analysis will be shown separately
+            change_analyses = {}
 
         # Generate content based on whether there are changes
         if changes:
             changes_section = f"""
-                <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
-                    Changes Detected: {len(changes)}
+                <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">
+                    Competitor Changes Detected: {len(changes)}
                 </h2>
 
-                {self._generate_changes_table(changes)}
+                {self._generate_changes_table(changes, change_analyses)}
             """
             header_color = "#2563eb"  # Blue for changes
         else:
@@ -122,7 +126,7 @@ class EmailReporter:
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             {styles}
         </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px;">
             <div style="background-color: {header_color}; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
                 <h1 style="margin: 0;">Competitor Intelligence Report</h1>
                 <p style="margin: 10px 0 0 0; opacity: 0.9;">{timestamp}</p>
@@ -130,14 +134,6 @@ class EmailReporter:
 
             <div style="background-color: white; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
                 {changes_section}
-
-                <h2 style="color: #1e40af; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-top: 30px;">
-                    AI Analysis & Insights
-                </h2>
-
-                <div class="analysis-content" style="background-color: #f0f9ff; padding: 15px; border-radius: 8px;">
-{analysis_html}
-                </div>
 
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 14px;">
                     <p>Generated by Competitor Monitoring Tool</p>
@@ -150,7 +146,8 @@ class EmailReporter:
 
         return html
 
-    def send_digest(self, changes: List[CompetitorChange], analysis: str, subject_prefix: str) -> bool:
+    def send_digest(self, changes: List[CompetitorChange],
+                    analysis: Union[str, Dict[str, str]], subject_prefix: str) -> bool:
         """Send email digest with changes and analysis."""
         now = datetime.now(UTC)
         timestamp = now.strftime("%B %d, %Y at %I:%M %p UTC")

@@ -7,13 +7,14 @@ from anthropic import Anthropic
 from openai import OpenAI
 
 from models import CompetitorChange
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_SYSTEM_PROMPT = (
     "You are a competitive intelligence analyst monitoring competitor websites for strategic changes. "
-    "For each changed page, summarize the new or changed content compared to the previous version of the page. "
-    "For blog pages, create a list of new blog posts with their titles."
+    "Summarize the key changes in 2-3 concise sentences. For blog pages, list new blog post titles. "
+    "Be specific and focus on what's new or different."
 )
 
 
@@ -35,30 +36,46 @@ class CompetitiveIntelligenceAnalyzer:
             raise ValueError(f"Unsupported AI provider: {provider}. Use 'anthropic' or 'openai'.")
 
     def analyze_changes(self, changes: List[CompetitorChange]) -> str:
-        """Analyze detected changes and generate insights."""
-        if not changes:
+        """Analyze detected changes and generate insights (legacy method for backwards compatibility)."""
+        change_analyses = self.analyze_changes_individually(changes)
+        if not change_analyses:
             return "No changes detected in this monitoring cycle."
 
-        changes_summary = "\n\n".join([
-            f"**{change.name}** ({change.url})\n"
-            f"Last checked: {change.last_checked}\n"
-            f"Content preview: {change.content[:500]}..."
-            for change in changes
+        # Format as a single report
+        return "\n\n".join([
+            f"**{change.name}**: {analysis}"
+            for change, analysis in zip(changes, change_analyses.values())
         ])
 
-        prompt = (
-            f"The following competitor websites have been updated since the last check:\n\n"
-            f"{changes_summary}"
-        )
+    def analyze_changes_individually(self, changes: List[CompetitorChange]) -> Dict[str, str]:
+        """Analyze each change individually and return a mapping of change name to analysis."""
+        if not changes:
+            return {}
 
-        try:
-            if self.provider == "anthropic":
-                return self._analyze_with_anthropic(prompt)
-            elif self.provider == "openai":
-                return self._analyze_with_openai(prompt)
-        except Exception as e:
-            logger.error(f"Error calling {self.provider.title()} API: {e}")
-            return f"Error analyzing changes: {str(e)}"
+        analyses = {}
+
+        for change in changes:
+            prompt = (
+                f"A competitor page has been updated:\n\n"
+                f"**Page**: {change.name}\n"
+                f"**URL**: {change.url}\n"
+                f"**Last checked**: {change.last_checked}\n\n"
+                f"**Current content preview**:\n{change.content[:800]}...\n\n"
+                f"Summarize what's new or changed on this page in 2-3 concise sentences."
+            )
+
+            try:
+                if self.provider == "anthropic":
+                    analysis = self._analyze_with_anthropic(prompt)
+                elif self.provider == "openai":
+                    analysis = self._analyze_with_openai(prompt)
+                analyses[change.name] = analysis
+                logger.info(f"Analyzed change for {change.name}")
+            except Exception as e:
+                logger.error(f"Error analyzing {change.name}: {e}")
+                analyses[change.name] = f"Error analyzing changes: {str(e)}"
+
+        return analyses
 
     def _analyze_with_anthropic(self, prompt: str) -> str:
         message = self.client.messages.create(

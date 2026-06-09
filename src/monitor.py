@@ -95,13 +95,14 @@ async def main():
     logger.info(f"\n{'='*60}")
     logger.info("Analyzing changes with AI...")
     logger.info(f"{'='*60}")
-    analysis = analyzer.analyze_changes(changes)
-    logger.info(f"\nAnalysis:\n{analysis}\n")
+    change_analyses = analyzer.analyze_changes_individually(changes)
+    for name, analysis in change_analyses.items():
+        logger.info(f"\n{name}:\n{analysis}\n")
 
     logger.info(f"\n{'='*60}")
     logger.info("Sending email digest...")
     logger.info(f"{'='*60}")
-    reporter.send_digest(changes, analysis, email_config['subject_prefix'])
+    reporter.send_digest(changes, change_analyses, email_config['subject_prefix'])
 
     logger.info(f"\nMonitoring complete at {datetime.now(UTC).isoformat()}")
     logger.info(f"Total changes detected: {len(changes)}")
