@@ -17,6 +17,7 @@ from scraper import WebScraper
 from snapshot_manager import SnapshotManager
 from analyzer import CompetitiveIntelligenceAnalyzer
 from email_reporter import EmailReporter
+from content_database import ContentDatabase
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +52,7 @@ async def main():
         snapshots_dir,
         content_limit=monitoring_config['snapshot_content_limit'],
     )
+    content_db = ContentDatabase()
     analyzer = CompetitiveIntelligenceAnalyzer(
         provider=ai_config['provider'],
         api_key=ai_api_key,
@@ -81,16 +83,23 @@ async def main():
             logger.warning(f"Failed to scrape {name}, skipping...")
             continue
 
-        has_changed, previous_timestamp = snapshot_manager.detect_change(name, url, content)
+        # Still save snapshots for reference
+        snapshot_manager.save_snapshot(name, url, content)
 
-        if has_changed:
+        # Find truly new content blocks that have never been seen before
+        new_content_blocks = content_db.update_and_find_new_content(name, content)
+
+        if new_content_blocks:
+            # Combine new blocks into a single content string for analysis
+            new_content = '\n\n'.join(new_content_blocks)
             change = CompetitorChange(
                 name=name,
                 url=url,
-                content=content,
-                last_checked=previous_timestamp or 'Never'
+                content=new_content,
+                last_checked='Previous content tracked in database'
             )
             changes.append(change)
+            logger.info(f"✓ New content detected for {name}: {len(new_content_blocks)} new blocks")
 
     logger.info(f"\n{'='*60}")
     logger.info("Analyzing changes with AI...")
