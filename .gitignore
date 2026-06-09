@@ -48,3 +48,4 @@ Thumbs.db
 
 # Keep snapshots directory but ignore its contents initially
 # (GitHub Actions will commit actual snapshots)
+content_db/
