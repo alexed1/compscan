@@ -1,11 +1,7 @@
 name: Competitor Monitoring
 
 on:
-  # Run daily at 9 AM UTC
-  schedule:
-    - cron: '0 9 * * *'
-
-  # Allow manual trigger
+  # Allow manual trigger only
   workflow_dispatch:
 
 permissions:
