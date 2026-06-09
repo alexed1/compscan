@@ -46,6 +46,14 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
+      - name: Restore content database cache
+        uses: actions/cache/restore@v4
+        with:
+          path: content_db/
+          key: content-db-${{ github.run_id }}
+          restore-keys: |
+            content-db-
+
       - name: Run competitor monitoring
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -81,6 +89,13 @@ jobs:
           else
             echo "No changes to snapshots"
           fi
+
+      - name: Save content database cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: content_db/
+          key: content-db-${{ github.run_id }}
 
       - name: Upload snapshots as artifact
         if: always()
