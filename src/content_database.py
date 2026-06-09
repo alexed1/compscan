@@ -33,12 +33,32 @@ class ContentDatabase:
         Split content into logical blocks for tracking.
         Uses sentences/paragraphs as the unit of tracking.
         """
+        import re
+
         # Split by newlines first
         lines = [line.strip() for line in content.split('\n') if line.strip()]
 
         # Filter out very short lines (likely navigation/UI elements)
         # Use 30 char minimum to catch meaningful content blocks
-        meaningful_lines = [line for line in lines if len(line) > 30]
+        meaningful_lines = []
+
+        # UUID pattern (8-4-4-4-12 format)
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+
+        for line in lines:
+            if len(line) <= 30:
+                continue
+
+            # Skip lines that are just UUIDs or contain only UUIDs
+            if uuid_pattern.match(line.strip()):
+                continue
+
+            # Skip lines that look like session IDs, tokens, or tracking codes
+            if re.match(r'^[a-zA-Z0-9_-]{20,}$', line.strip()):
+                # Long alphanumeric strings without spaces are likely IDs
+                continue
+
+            meaningful_lines.append(line)
 
         return meaningful_lines
 
