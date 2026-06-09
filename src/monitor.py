@@ -83,8 +83,12 @@ async def main():
             logger.warning(f"Failed to scrape {name}, skipping...")
             continue
 
+        # Compute hash for snapshot
+        import hashlib
+        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+
         # Still save snapshots for reference
-        snapshot_manager.save_snapshot(name, url, content)
+        snapshot_manager.save_snapshot(name, url, content, content_hash)
 
         # Find truly new content blocks that have never been seen before
         new_content_blocks = content_db.update_and_find_new_content(name, content)
